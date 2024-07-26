@@ -1,126 +1,189 @@
 import 'package:flutter/material.dart';
-import 'package:chat_bot/utils/env.dart'
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 void main() {
-  runApp(const MyApp());
+  runApp(ChatBotApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
+class ChatBotApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Gemini Key ChatBot',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-
-        useMaterial3: false,
+        primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: ChatScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class ChatScreen extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _ChatScreenState createState() => _ChatScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _ChatScreenState extends State<ChatScreen> {
+  TextEditingController messageController = TextEditingController();
+  List<Map<String, dynamic>> messages = [];
 
-  void _incrementCounter() {
+  final String apiKey = 'AIzaSyCiRpyTI2mKc2ZCn9pSRUYU8Jl4tSVjCZ8';
+  final String geminiKeyEndpoint = 'https://api.geminikey.com/parse';
+
+  void sendMessage(String messageText) async {
+    messageController.clear();
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      messages.add({
+        'text': messageText,
+        'sender': 'user',
+      });
     });
+
+    final response = await http.post(
+      Uri.parse(geminiKeyEndpoint),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: jsonEncode({'query': messageText}),
+    );
+
+    if (response.statusCode == 200) {
+      Map<String, dynamic> data = jsonDecode(response.body);
+      String botResponse = data['response']['text'];
+      setState(() {
+        messages.add({
+          'text': botResponse,
+          'sender': 'bot',
+        });
+      });
+    } else {
+      print('Failed to fetch response');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: Text('Gemini Key ChatBot'),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+      body: Column(
+        children: <Widget>[
+          Expanded(
+            child: ListView.builder(
+              reverse: true,
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                return MessageBubble(
+                  text: messages[index]['text'],
+                  sender: messages[index]['sender'],
+                );
+              },
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          Divider(height: 1.0),
+          Container(
+            decoration: BoxDecoration(color: Theme.of(context).cardColor),
+            child: _buildMessageComposer(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageComposer() {
+    return IconTheme(
+      data: IconThemeData(color: Theme.of(context).accentColor),
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 8.0),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                controller: messageController,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (value) {},
+                decoration: InputDecoration.collapsed(
+                  hintText: "Send a message",
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.send),
+              onPressed: () {
+                if (messageController.text.isNotEmpty) {
+                  sendMessage(messageController.text);
+                }
+              },
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+}
+
+class MessageBubble extends StatelessWidget {
+  final String text;
+  final String sender;
+
+  MessageBubble({required this.text, required this.sender});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(8.0),
+      child: Row(
+        mainAxisAlignment:
+            sender == 'bot' ? MainAxisAlignment.start : MainAxisAlignment.end,
+        children: <Widget>[
+          sender == 'bot' ? _buildBotAvatar() : Container(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: sender == 'bot'
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.end,
+              children: <Widget>[
+                Text(
+                  sender == 'bot' ? 'Bot' : 'You',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Container(
+                  margin: EdgeInsets.only(top: 5.0),
+                  padding: EdgeInsets.all(10.0),
+                  decoration: BoxDecoration(
+                    color: sender == 'bot'
+                        ? Colors.grey[300]
+                        : Theme.of(context).accentColor,
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
+                  child: Text(
+                    text,
+                    style: TextStyle(color: Colors.black),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          sender == 'user' ? _buildUserAvatar() : Container(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBotAvatar() {
+    return CircleAvatar(
+      child: Text('B'),
+      backgroundColor: Colors.blueGrey,
+    );
+  }
+
+  Widget _buildUserAvatar() {
+    return CircleAvatar(
+      child: Text('U'),
+      backgroundColor: Colors.blue,
     );
   }
 }
